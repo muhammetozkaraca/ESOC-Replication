@@ -5,9 +5,11 @@ library(splitstackshape)
 library(countrycode)
 library(paletteer)
 library(gameofthrones)
+library(rgdal)
+library(rgeos)
+library(sf)
 
-
-setwd("./Desktop")
+setwd("~/Desktop")
 all_flows <- read.csv("all_flow_classes.csv")
 projects_sources <- read.csv("project_descriptions_and_sources.csv")
 
@@ -19,11 +21,11 @@ showtext_auto()
 
 ## Create a map of Chinese investment projects globally. 
 
-world <- map_data("world")
-world <- world[world$region!="Antarctica",]
+world_data <- map_data("world")
+world_data <- world[world_data$region!="Antarctica",]
 
 ggplot() +
-  geom_polygon(data = world, aes(x = long, y = lat, group = group), fill = "grey") +
+  geom_polygon(data = world_data, aes(x = long, y = lat, group = group), fill = "grey") +
   geom_point(data = all_flows, aes(x = longitude, y = latitude), alpha = 0.3, color = "3FFF33", size = 1) +
   ggthemes::theme_map() +
   coord_fixed(1.3) +
@@ -38,7 +40,7 @@ ggplot() +
 ### different kinds of projects,
 
 ggplot() +
-  geom_polygon(data = world, aes(x = long, y = lat, group = group), fill = "grey", alpha = 0.6) +
+  geom_polygon(data = world_data, aes(x = long, y = lat, group = group), fill = "grey", alpha = 0.6) +
   geom_point(data = all_flows, aes(x = longitude, y = latitude, color = intent), alpha = 0.3, size = 1) +
   ggthemes::theme_map() +
   coord_fixed(1.3) +
@@ -59,16 +61,16 @@ flows_per_country <- all_flows %>%
 
 colnames(flows_per_country)[1] <- "iso3c"
 
-world$iso3c <- countrycode(world$region, origin = "country.name", destination = "iso3c")
+world_data$iso3c <- countrycode(world_data$region, origin = "country.name", destination = "iso3c")
 
-setdiff(flows_per_country$iso3c, world$iso3c)
-world[world$region == "Micronesia", ]$iso3c <- "FSM"
+setdiff(flows_per_country$iso3c, world_data$iso3c)
+world_data[world_data$region == "Micronesia", ]$iso3c <- "FSM"
 
-world <- world %>%
+world_data <- world_data %>%
   left_join(flows_per_country, by = "iso3c")
 
 ggplot() +
-  geom_polygon(data = world, aes(x = long, y = lat, group = group, fill = project_per_country)) +
+  geom_polygon(data = world_data, aes(x = long, y = lat, group = group, fill = project_per_country)) +
   ggthemes::theme_map() +
   scale_fill_got(option = "Daenerys", direction = 1) +
   # scale_fill_distiller (palette = "Spectral") +
@@ -86,8 +88,26 @@ ggplot() +
 ### Note: You will need to find your own shapefiles at the relevant unit of analysis for 
 ### your country of choice. It is recommended to pick a country with a good number of projects.
 
+world_data %>%
+  arrange(desc(project_per_country)) %>%
+  distinct() %>%
+  head()
 
+sf <- st_read(dsn="KHM_adm", layer="KHM_adm2")
+shape <- readOGR(dsn="KHM_adm", layer="KHM_adm2")
 
+cambodia_projects <- all_flows %>%
+  splitstackshape::cSplit(c("recipients"), sep= c("|"), "long") %>%
+  filter(recipients == "Cambodia")
+
+ggplot() + 
+  geom_sf(data = sf, fill = "lightgrey") + 
+  geom_point(data = cambodia_projects, aes(x = longitude, y = latitude), color = "3FFF33", size = 0.7, alpha = 0.5) +
+  labs(title = "Chinese Foreign Investments in Cambodia") +
+  xlim (102, 108) +
+  ylim(9, 16) +
+  theme_void() +
+  theme(legend.position = "none") 
 
 
 
